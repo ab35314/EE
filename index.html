@@ -167,10 +167,22 @@
             background: #e8f5e9;
             padding: 10px 15px;
             border-radius: 8px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .badge {
             background: var(--primary-color);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-right: 5px;
+        }
+
+        .badge-cat {
+            background: #1976d2;
             color: white;
             padding: 4px 10px;
             border-radius: 12px;
@@ -351,6 +363,14 @@
         </div>
 
         <div class="form-group">
+            <label for="category-select">選擇主題分類：</label>
+            <select id="category-select" class="form-control">
+                <option value="全部">全主題（綜合）</option>
+                <!-- 動態由 JavaScript 載入所有分類標籤 -->
+            </select>
+        </div>
+
+        <div class="form-group">
             <label for="count-select">選擇測驗題數：</label>
             <select id="count-select" class="form-control">
                 <option value="5">5 題（每題 20 分）</option>
@@ -367,7 +387,11 @@
     <!-- 2. 測驗進行畫面 -->
     <div id="quiz-screen" class="screen">
         <div class="quiz-header">
-            <div><span class="badge" id="current-level-badge">級別</span> <span id="question-count-text">第 1 / 10 題</span></div>
+            <div>
+                <span class="badge" id="current-level-badge">級別</span>
+                <span class="badge-cat" id="current-category-badge">分類</span>
+                <span id="question-count-text">第 1 / 10 題</span>
+            </div>
             <div>配分：每題 <span id="points-per-q">10</span> 分</div>
         </div>
 
@@ -420,6 +444,10 @@ window.addEventListener('DOMContentLoaded', () => {
         })
         .then(data => {
             ALL_QUESTIONS = data;
+            
+            // 動態初始化分類標籤選項
+            initCategories(data);
+
             document.getElementById('loading-screen').style.display = 'none';
             document.getElementById('setup-screen').classList.add('active');
             
@@ -436,17 +464,39 @@ window.addEventListener('DOMContentLoaded', () => {
         });
 });
 
+function initCategories(data) {
+    const categorySelect = document.getElementById('category-select');
+    const categories = new Set();
+    
+    data.forEach(q => {
+        if (q.category) {
+            categories.add(q.category);
+        }
+    });
+
+    const sortedCategories = Array.from(categories).sort();
+    sortedCategories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        categorySelect.appendChild(option);
+    });
+}
+
 function startQuiz() {
     const selectedLevel = document.getElementById('level-select').value;
+    const selectedCategory = document.getElementById('category-select').value;
     const selectedCount = parseInt(document.getElementById('count-select').value);
 
-    // 篩選級別
-    let filtered = selectedLevel === '全部' 
-        ? ALL_QUESTIONS 
-        : ALL_QUESTIONS.filter(q => q.level === selectedLevel);
+    // 同時篩選級別與分類標籤
+    let filtered = ALL_QUESTIONS.filter(q => {
+        const matchLevel = (selectedLevel === '全部' || q.level === selectedLevel);
+        const matchCategory = (selectedCategory === '全部' || q.category === selectedCategory);
+        return matchLevel && matchCategory;
+    });
 
     if (filtered.length === 0) {
-        alert("該級別無可用題目！");
+        alert("找不到符合該「級別」與「分類」條件的題目，請重新選擇條件！");
         return;
     }
 
@@ -463,7 +513,6 @@ function startQuiz() {
     document.getElementById('quiz-screen').classList.add('active');
     document.getElementById('result-screen').classList.remove('active');
 
-    document.getElementById('current-level-badge').innerText = selectedLevel;
     document.getElementById('points-per-q').innerText = pointsPerQuestion % 1 === 0 ? pointsPerQuestion : pointsPerQuestion.toFixed(1);
 
     renderQuestion();
@@ -472,6 +521,9 @@ function startQuiz() {
 function renderQuestion() {
     const q = currentQuiz[currentIndex];
     const total = currentQuiz.length;
+
+    document.getElementById('current-level-badge').innerText = q.level || '無級別';
+    document.getElementById('current-category-badge').innerText = q.category || '未分類';
 
     document.getElementById('question-count-text').innerText = `第 ${currentIndex + 1} / ${total} 題`;
     document.getElementById('progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
@@ -549,7 +601,7 @@ function finishQuiz() {
         let correctAnsText = `${q.answer}. ${q.options[q.answer - 1]}`;
 
         item.innerHTML = `
-            <div class="review-q">${idx + 1}. [${q.level}] ${q.question}</div>
+            <div class="review-q">${idx + 1}. [${q.level}][${q.category || '未分類'}] ${q.question}</div>
             <div class="review-ans">您的答案：<span class="${isCorrect ? 'text-correct' : 'text-incorrect'}">${userAnsText}</span></div>
             ${!isCorrect ? `<div class="review-ans">正確答案：<span class="text-correct">${correctAnsText}</span></div>` : ''}
             ${q.explanation ? `<div class="explanation">💡 <strong>題目解析：</strong>${q.explanation}</div>` : ''}
