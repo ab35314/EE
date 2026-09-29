@@ -366,7 +366,6 @@
             <label for="category-select">選擇主題分類：</label>
             <select id="category-select" class="form-control">
                 <option value="全部">全主題（綜合）</option>
-                <!-- 動態由 JavaScript 載入所有分類標籤 -->
             </select>
         </div>
 
@@ -433,7 +432,6 @@ let currentIndex = 0;
 let userAnswers = [];
 let pointsPerQuestion = 0;
 
-// 當網頁載入時，發送 fetch 請求讀取同目錄下的 questions.json
 window.addEventListener('DOMContentLoaded', () => {
     fetch('questions.json')
         .then(response => {
@@ -445,7 +443,7 @@ window.addEventListener('DOMContentLoaded', () => {
         .then(data => {
             ALL_QUESTIONS = data;
             
-            // 動態初始化分類標籤選項
+            // 初始化並正確生成分類清單
             initCategories(data);
 
             document.getElementById('loading-screen').style.display = 'none';
@@ -466,15 +464,24 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function initCategories(data) {
     const categorySelect = document.getElementById('category-select');
+    categorySelect.innerHTML = '<option value="全部">全主題（綜合）</option>';
+
     const categories = new Set();
     
     data.forEach(q => {
-        if (q.category) {
-            categories.add(q.category);
+        if (q.category && typeof q.category === 'string') {
+            const trimmed = q.category.trim();
+            if (trimmed) {
+                categories.add(trimmed);
+            }
         }
     });
 
-    const sortedCategories = Array.from(categories).sort();
+    // 依類別名稱排序（包含數字編號如 1.綠色生活, 2.氣候變遷 ...）
+    const sortedCategories = Array.from(categories).sort((a, b) => {
+        return a.localeCompare(b, 'zh-Hant', { numeric: true });
+    });
+
     sortedCategories.forEach(cat => {
         const option = document.createElement('option');
         option.value = cat;
@@ -484,14 +491,18 @@ function initCategories(data) {
 }
 
 function startQuiz() {
-    const selectedLevel = document.getElementById('level-select').value;
-    const selectedCategory = document.getElementById('category-select').value;
+    const selectedLevel = document.getElementById('level-select').value.trim();
+    const selectedCategory = document.getElementById('category-select').value.trim();
     const selectedCount = parseInt(document.getElementById('count-select').value);
 
-    // 同時篩選級別與分類標籤
+    // 完美雙重篩選：當選「全部」時忽略該條件
     let filtered = ALL_QUESTIONS.filter(q => {
-        const matchLevel = (selectedLevel === '全部' || q.level === selectedLevel);
-        const matchCategory = (selectedCategory === '全部' || q.category === selectedCategory);
+        const qLevel = (q.level || '').trim();
+        const qCategory = (q.category || '').trim();
+
+        const matchLevel = (selectedLevel === '全部' || qLevel === selectedLevel);
+        const matchCategory = (selectedCategory === '全部' || qCategory === selectedCategory);
+
         return matchLevel && matchCategory;
     });
 
@@ -522,8 +533,9 @@ function renderQuestion() {
     const q = currentQuiz[currentIndex];
     const total = currentQuiz.length;
 
-    document.getElementById('current-level-badge').innerText = q.level || '無級別';
-    document.getElementById('current-category-badge').innerText = q.category || '未分類';
+    // 即時顯示該題目實際的級別與主題分類標籤
+    document.getElementById('current-level-badge').innerText = q.level || '全級別';
+    document.getElementById('current-category-badge').innerText = q.category || '全主題';
 
     document.getElementById('question-count-text').innerText = `第 ${currentIndex + 1} / ${total} 題`;
     document.getElementById('progress-bar').style.width = `${((currentIndex + 1) / total) * 100}%`;
